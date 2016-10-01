@@ -291,7 +291,7 @@ class QuestionAnswerer(BaseModel):
             else:
                 emb_w = weight('emb_w', [num_words, dim_embed], init_val=idx2vec, group_id=1)                
         else:
-            emb_w = weight('emb_w', [num_words, dim_embed], init='he', group_id=1)  
+            emb_w = weight('emb_w', [num_words, dim_embed], group_id=1)  
 
         #Encode the questions
         with tf.variable_scope('Question'):

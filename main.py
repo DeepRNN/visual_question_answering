@@ -18,6 +18,7 @@ def main(argv):
     parser.add_argument('--cnn_model', default = 'vgg16')
     parser.add_argument('--cnn_model_file', default = './tfmodels/vgg16.tfmodel')
     parser.add_argument('--load_cnn_model', action = 'store_true', default = False)
+    parser.add_argument('--train_cnn', action = 'store_true', default = False)
   
     parser.add_argument('--train_image_dir', default = './train/images/')
     parser.add_argument('--train_question_file', default = './train/OpenEnded_mscoco_train2014_questions.json')
@@ -36,7 +37,7 @@ def main(argv):
 
     parser.add_argument('--word_table_file', default = './words/word_table.pickle')
     parser.add_argument('--glove_dir', default = './words/')
-    parser.add_argument('--word2vec_scale', type = float, default = 0.2)
+    parser.add_argument('--word2vec_scale', type = float, default = 0.1)
     parser.add_argument('--max_ques_len', type = int, default = 30)
 
     parser.add_argument('--save_dir', default = './models/')
@@ -55,7 +56,6 @@ def main(argv):
     parser.add_argument('--dim_embed', type = int, default = 300)
     parser.add_argument('--init_embed_weight', action = 'store_true', default = False)
     parser.add_argument('--fix_embed_weight', action = 'store_true', default = False)
-    parser.add_argument('--train_cnn', action = 'store_true', default = False)
 
     parser.add_argument('--memory_step', type = int, default = 3)
     parser.add_argument('--memory_update', default = 'gru')
