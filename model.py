@@ -272,7 +272,7 @@ class QuestionAnswerer(BaseModel):
         dim_fact = self.conv_feat_shape[1]                                      
         num_words = self.word_table.num_words              
 
-        if self.mode=='train' and not self.train_cnn:
+        if not self.train_cnn:
             facts = tf.placeholder(tf.float32, [batch_size, num_facts, dim_fact])   
         else:
             facts = self.conv_feats
@@ -404,6 +404,9 @@ class QuestionAnswerer(BaseModel):
                 return {self.facts: feats, self.questions: questions, self.question_lens: question_lens, self.answers: answers,  self.is_train: is_train}
 
         else:
-            img_files, questions, question_lens = batch 
-            return {self.img_files: img_files, self.questions: questions, self.question_lens: question_lens,  self.is_train: is_train}
+            img_files, questions, question_lens = batch
+            if self.train_cnn: 
+                return {self.img_files: img_files, self.questions: questions, self.question_lens: question_lens, self.is_train: is_train} 
+            else: 
+                return {self.facts: feats, self.questions: questions, self.question_lens: question_lens, self.is_train: is_train}
 

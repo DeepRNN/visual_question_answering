@@ -49,10 +49,11 @@ class BaseModel(object):
         self.params = params
         self.mode = mode
         self.batch_size = params.batch_size if mode=='train' else 1
-        self.save_dir = params.save_dir
 
         self.cnn_model = params.cnn_model
         self.train_cnn = params.train_cnn
+
+        self.save_dir = os.path.join(params.save_dir, self.cnn_model+'/')
 
         self.img_loader = ImageLoader(params.mean_file)
         self.img_shape = [224, 224, 3]
@@ -104,7 +105,14 @@ class BaseModel(object):
 
         for k in tqdm(list(range(val_data.count))):
             batch = val_data.next_batch()
-            feed_dict = self.get_feed_dict(batch, is_train=False)
+
+            if self.train_cnn: 
+                feed_dict = self.get_feed_dict(batch, is_train=False) 
+            else: 
+                img_files, _, _ = batch 
+                feats = sess.run(self.conv_feats, feed_dict={self.img_files:img_files, self.is_train:False}) 
+                feed_dict = self.get_feed_dict(batch, is_train=False, feats=feats)
+
             result = sess.run(self.results, feed_dict=feed_dict)
             answer = self.word_table.idx2word[result]
             answers.append({'question_id': val_data.question_ids[k], 'answer': answer})
@@ -125,7 +133,14 @@ class BaseModel(object):
         
         for k in tqdm(list(range(test_data.count))):
             batch = test_data.next_batch()
-            feed_dict = self.get_feed_dict(batch, is_train=False)
+
+            if self.train_cnn: 
+                feed_dict = self.get_feed_dict(batch, is_train=False) 
+            else: 
+                img_files, _, _ = batch 
+                feats = sess.run(self.conv_feats, feed_dict={self.img_files:img_files, self.is_train:False}) 
+                feed_dict = self.get_feed_dict(batch, is_train=False, feats=feats)            
+
             result = sess.run(self.results, feed_dict=feed_dict)
             answer = self.word_table.idx2word[result]
             answers.append(answer)
