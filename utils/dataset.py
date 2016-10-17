@@ -71,7 +71,7 @@ def prepare_train_data(args):
     answers = annotations['answer'].values
     print("Number of training questions = %d" %(len(question_ids)))
 
-    print("Building the word table ...")
+    print("Building the word table...")
     word_table = WordTable(dim_embed, max_ques_len, word_table_file)
     if not os.path.exists(word_table_file):
         word_table.load_glove(glove_dir)
@@ -88,7 +88,7 @@ def prepare_train_data(args):
     questions, question_lens = symbolize_questions(questions, word_table)
     answers = symbolize_answers(answers, word_table)
 
-    print("Building the training dataset ...")
+    print("Building the training dataset...")
     dataset = DataSet(image_files, questions, question_lens, question_ids, answers, batch_size, True, True)
     print("Dataset built.")
     return vqa, dataset
@@ -115,7 +115,7 @@ def prepare_val_data(args):
 
     questions, question_lens = symbolize_questions(questions, word_table)
    
-    print("Building the validation dataset ...")
+    print("Building the validation dataset...")
     dataset = DataSet(image_files, questions, question_lens, question_ids)
     print("Dataset built.")
     return vqa, dataset
@@ -147,7 +147,7 @@ def prepare_test_data(args):
 
     questions, question_lens = symbolize_questions(questions, word_table)
 
-    print("Building the testing dataset ...")    
+    print("Building the testing dataset...")    
     dataset = DataSet(image_files, questions, question_lens, question_ids)
     print("Dataset built.")
     return dataset
