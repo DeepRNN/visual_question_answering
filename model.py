@@ -9,10 +9,12 @@ from episodic_memory import *
 
 class QuestionAnswerer(BaseModel):
     def build(self):
+        """ Build the model. """
         self.build_cnn()
         self.build_rnn()
 
     def build_cnn(self):
+        """ Build the CNN. """
         print("Building the CNN part...")
         if self.cnn_model=='vgg16':
             self.build_vgg16()
@@ -25,15 +27,11 @@ class QuestionAnswerer(BaseModel):
         print("CNN part built.")
 
     def build_vgg16(self):
+        """ Build the VGG16 net. """
         bn = self.params.batch_norm
 
-        img_files = tf.placeholder(tf.string, [self.batch_size])
+        imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)
-
-        imgs = []
-        for img_file in tf.unpack(img_files):
-            imgs.append(self.img_loader.load_img(img_file))
-        imgs = tf.pack(imgs)          
 
         conv1_1_feats = convolution(imgs, 3, 3, 64, 1, 1, 'conv1_1')
         conv1_1_feats = batch_norm(conv1_1_feats, 'bn1_1', is_train, bn, 'relu')
@@ -76,10 +74,11 @@ class QuestionAnswerer(BaseModel):
         self.conv_feats = conv5_3_feats_flat
         self.conv_feat_shape = [196, 512]
 
-        self.img_files = img_files
+        self.imgs = imgs
         self.is_train = is_train
 
     def basic_block(self, input_feats, name1, name2, is_train, bn, c, s=2):
+        """ A basic block of ResNets. """
         branch1_feats = convolution_no_bias(input_feats, 1, 1, 4*c, s, s, name1+'_branch1')
         branch1_feats = batch_norm(branch1_feats, name2+'_branch1', is_train, bn, None)
 
@@ -97,6 +96,7 @@ class QuestionAnswerer(BaseModel):
         return output_feats
 
     def basic_block2(self, input_feats, name1, name2, is_train, bn, c):
+        """ Another basic block of ResNets. """
         branch2a_feats = convolution_no_bias(input_feats, 1, 1, c, 1, 1, name1+'_branch2a')
         branch2a_feats = batch_norm(branch2a_feats, name2+'_branch2a', is_train, bn, 'relu')
 
@@ -111,15 +111,11 @@ class QuestionAnswerer(BaseModel):
         return output_feats
 
     def build_resnet50(self):
+        """ Build the ResNet50 net. """
         bn = self.params.batch_norm
 
-        img_files = tf.placeholder(tf.string, [self.batch_size])
-        is_train = tf.placeholder(tf.bool)
-
-        imgs = []
-        for img_file in tf.unpack(img_files):
-            imgs.append(self.img_loader.load_img(img_file))
-        imgs = tf.pack(imgs)          
+        imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
+        is_train = tf.placeholder(tf.bool)     
 
         conv1_feats = convolution(imgs, 7, 7, 64, 2, 2, 'conv1')
         conv1_feats = batch_norm(conv1_feats, 'bn_conv1', is_train, bn, 'relu')
@@ -151,19 +147,15 @@ class QuestionAnswerer(BaseModel):
         self.conv_feats = res5c_feats_flat
         self.conv_feat_shape = [49, 2048]
 
-        self.img_files = img_files
+        self.imgs = imgs
         self.is_train = is_train
 
     def build_resnet101(self):
+        """ Build the ResNet101 net. """
         bn = self.params.batch_norm
 
-        img_files = tf.placeholder(tf.string, [self.batch_size])
+        imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)
-
-        imgs = []
-        for img_file in tf.unpack(img_files):
-            imgs.append(self.img_loader.load_img(img_file))
-        imgs = tf.pack(imgs)  
 
         conv1_feats = convolution(imgs, 7, 7, 64, 2, 2, 'conv1')
         conv1_feats = batch_norm(conv1_feats, 'bn_conv1', is_train, bn, 'relu')
@@ -195,19 +187,15 @@ class QuestionAnswerer(BaseModel):
         self.conv_feats = res5c_feats_flat
         self.conv_feat_shape = [49, 2048]
 
-        self.img_files = img_files
+        self.imgs = imgs
         self.is_train = is_train
 
     def build_resnet152(self):
+        """ Build the ResNet152 net. """
         bn = self.params.batch_norm
 
-        img_files = tf.placeholder(tf.string, [self.batch_size])
+        imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)
-
-        imgs = []
-        for img_file in tf.unpack(img_files):
-            imgs.append(self.img_loader.load_img(img_file))
-        imgs = tf.pack(imgs)  
 
         conv1_feats = convolution(imgs, 7, 7, 64, 2, 2, 'conv1')
         conv1_feats = batch_norm(conv1_feats, 'bn_conv1', is_train, bn, 'relu')
@@ -243,6 +231,7 @@ class QuestionAnswerer(BaseModel):
         self.is_train = is_train
 
     def get_permutation(self, height, width):
+        """ Get the permutation corresponding to a snake-like walk as decribed by the paper. Used to flatten the convolutional feats. """
         permutation = np.zeros(height*width, np.int32)
         for i in range(height):
             for j in range(width):
@@ -250,6 +239,7 @@ class QuestionAnswerer(BaseModel):
         return permutation
 
     def flatten_feats(self, feats, channels):
+        """ Flatten the feats. """
         temp1 = tf.reshape(feats, [self.batch_size, -1, channels])
         temp1 = tf.transpose(temp1, [1, 0, 2])
         temp2 = tf.gather(temp1, self.permutation)
@@ -257,6 +247,7 @@ class QuestionAnswerer(BaseModel):
         return temp2
 
     def build_rnn(self):
+        """ Build the RNN. """
         print("Building the RNN part...")
         params = self.params
         bn = params.batch_norm      
@@ -266,11 +257,12 @@ class QuestionAnswerer(BaseModel):
         dim_hidden = params.dim_hidden                     
         dim_embed = params.dim_embed                       
         max_ques_len = params.max_ques_len                 
-        word2vec_scale = params.word2vec_scale
 
         num_facts = self.conv_feat_shape[0]                                      
         dim_fact = self.conv_feat_shape[1]                                      
         num_words = self.word_table.num_words              
+
+        self.word_weight = np.exp(-np.array(self.word_table.word_freq)*self.class_balancing_factor)
 
         if not self.train_cnn:
             facts = tf.placeholder(tf.float32, [batch_size, num_facts, dim_fact])   
@@ -280,20 +272,18 @@ class QuestionAnswerer(BaseModel):
         questions = tf.placeholder(tf.int32, [batch_size, max_ques_len])        
         question_lens = tf.placeholder(tf.int32, [batch_size])                   
         answers = tf.placeholder(tf.int32, [batch_size])                        
+        answer_weights = tf.placeholder(tf.float32, [batch_size])                        
         
         gru = tf.nn.rnn_cell.GRUCell(dim_hidden)
 
-        #Initialize the word embedding
-        idx2vec = np.array([self.word_table.word2vec[self.word_table.idx2word[i]] for i in range(num_words)]) * word2vec_scale  
-        if params.init_embed_weight:
-            if params.fix_embed_weight:
-                emb_w = tf.convert_to_tensor(idx2vec, tf.float32)                       
-            else:
-                emb_w = weight('emb_w', [num_words, dim_embed], init_val=idx2vec, group_id=1)                
+        # Initialize the word embedding
+        idx2vec = np.array([self.word_table.word2vec[self.word_table.idx2word[i]] for i in range(num_words)])  
+        if params.fix_embed_weight:
+            emb_w = tf.convert_to_tensor(idx2vec, tf.float32)                       
         else:
-            emb_w = weight('emb_w', [num_words, dim_embed], group_id=1)  
+            emb_w = weight('emb_w', [num_words, dim_embed], init_val=idx2vec, group_id=1)                
 
-        #Encode the questions
+        # Encode the questions
         with tf.variable_scope('Question'):
             word_list = tf.unpack(questions, axis=1)                                             
             ques_embed = [tf.nn.embedding_lookup(emb_w, word) for word in word_list]             
@@ -309,7 +299,7 @@ class QuestionAnswerer(BaseModel):
             question_enc = tf.pack(question_enc)                                                 
            #ques_enc = final_state
 
-        #Encode the facts
+        # Encode the facts
         with tf.name_scope('InputFusion'):
 
             with tf.variable_scope('Forward'):
@@ -322,15 +312,16 @@ class QuestionAnswerer(BaseModel):
 
             facts_enc = forward_states + backward_states                                      
 
-        #Episodic Memory Update
+        # Episodic Memory Update
         with tf.variable_scope('EpisodicMemory'):
             episode = EpisodicMemory(dim_hidden, num_facts, question_enc, facts_enc, params.attention, is_train, bn)
             memory = tf.identity(question_enc)                                                   
-
-            if params.tie_memory_weight:
+            
+            # Tied memory weights
+            if params.tie_memory_weight: 
                 with tf.variable_scope('Layer') as scope:
                     for t in range(params.memory_step):
-                        if params.memory_update == 'gru':
+                        if params.memory_update == 'gru': 
                             memory = gru(episode.new_fact(memory), memory)[0]                     
                         else:
                             fact = episode.new_fact(memory)                                        
@@ -338,6 +329,8 @@ class QuestionAnswerer(BaseModel):
                             memory = fully_connected(expanded_memory, dim_hidden, 'EM_fc', group_id=1)
                             memory = batch_norm(memory, 'EM_bn', is_train, bn, 'relu')  
                         scope.reuse_variables()
+
+            # Untied memory weights
             else:
                 for t in range(params.memory_step):
                     with tf.variable_scope('Layer%d' %t) as scope:
@@ -351,7 +344,7 @@ class QuestionAnswerer(BaseModel):
 
         memory = dropout(memory, 0.5, is_train)                                                  
         
-        #Compute the result
+        # Compute the result
         with tf.variable_scope('Result'):    
             expanded_memory = tf.concat(1, [memory, question_enc])    
             logits = fully_connected(expanded_memory, num_words, 'dec', group_id=1)
@@ -359,16 +352,18 @@ class QuestionAnswerer(BaseModel):
             all_probs = tf.nn.softmax(logits)                                                    
             probs = tf.reduce_max(all_probs, 1)                                                      
 
-        #Compute the loss
+        # Compute the loss
         with tf.variable_scope('Loss'):        
             cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, answers) 
-            loss0 = tf.reduce_sum(cross_entropy) / self.batch_size
+            loss0 = cross_entropy * answer_weights
+            loss0 = tf.reduce_sum(loss0) / tf.reduce_sum(answer_weights)
             if self.train_cnn:
                 loss1 = params.weight_decay * (tf.add_n(tf.get_collection('l2_0')) + tf.add_n(tf.get_collection('l2_1')))  
             else:
                 loss1 = params.weight_decay * tf.add_n(tf.get_collection('l2_1'))
             loss = loss0 + loss1
 
+        # Build the solver
         if params.solver == 'adam':
             solver = tf.train.AdamOptimizer(params.learning_rate)
         elif params.solver == 'momentum':
@@ -378,12 +373,15 @@ class QuestionAnswerer(BaseModel):
         else:
             solver = tf.train.GradientDescentOptimizer(params.learning_rate)
 
-        opt_op = solver.minimize(loss, global_step=self.global_step)
+        tvars = tf.trainable_variables()
+        gs, _ = tf.clip_by_global_norm(tf.gradients(loss, tvars), 3.0)
+        opt_op = solver.apply_gradients(zip(gs, tvars), global_step=self.global_step)
 
         self.facts = facts
         self.questions = questions
         self.question_lens = question_lens
         self.answers = answers
+        self.answer_weights = answer_weights
 
         self.loss = loss
         self.loss0 = loss0
@@ -396,17 +394,23 @@ class QuestionAnswerer(BaseModel):
         print("RNN part built.")        
 
     def get_feed_dict(self, batch, is_train, feats=None):
+        """ Get the feed dictionary for the current batch. """
         if is_train:
+            # training phase
             img_files, questions, question_lens, answers = batch
+            imgs = self.img_loader.load_imgs(img_files)
+            answer_weights = self.word_weight[answers]
             if self.train_cnn:
-                return {self.img_files: img_files, self.questions: questions, self.question_lens: question_lens, self.answers: answers,  self.is_train: is_train}
+                return {self.imgs: imgs, self.questions: questions, self.question_lens: question_lens, self.answers: answers, self.answer_weights: answer_weights, self.is_train: is_train}
             else:
-                return {self.facts: feats, self.questions: questions, self.question_lens: question_lens, self.answers: answers,  self.is_train: is_train}
+                return {self.facts: feats, self.questions: questions, self.question_lens: question_lens, self.answers: answers, self.answer_weights: answer_weights, self.is_train: is_train}
 
         else:
+            # testing or validation phase
             img_files, questions, question_lens = batch
+            imgs = self.img_loader.load_imgs(img_files)
             if self.train_cnn: 
-                return {self.img_files: img_files, self.questions: questions, self.question_lens: question_lens, self.is_train: is_train} 
+                return {self.imgs: imgs, self.questions: questions, self.question_lens: question_lens, self.is_train: is_train} 
             else: 
                 return {self.facts: feats, self.questions: questions, self.question_lens: question_lens, self.is_train: is_train}
 

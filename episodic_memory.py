@@ -2,6 +2,7 @@ import tensorflow as tf
 from utils.nn import *
 
 class AttnGRU:
+    """ Attention-based GRU (used by the Episodic Memory Module). """
     def __init__(self, num_units, is_train, bn):
         self.num_units = num_units
         self.is_train = is_train
@@ -20,6 +21,7 @@ class AttnGRU:
 
 
 class EpisodicMemory:
+    """ Episodic Memory Module. """
     def __init__(self, num_units, num_facts, question, facts, attention, is_train, bn):
         self.num_units = num_units                       
         self.num_facts = num_facts                           
@@ -31,6 +33,7 @@ class EpisodicMemory:
         self.attn_gru = AttnGRU(num_units, is_train, bn)
 
     def new_fact(self, memory):
+        """ Get the context vector by using soft attention or attention-based GRU. """
         fact_list = tf.unpack(self.facts, axis=1)  
         mixed_fact = tf.zeros_like(fact_list[0])       
 
@@ -48,6 +51,7 @@ class EpisodicMemory:
         return mixed_fact                                                                 
 
     def attend(self, memory):
+        """ Get the attention weights. """
         c = self.facts                                                                
         q = tf.tile(tf.expand_dims(self.question, 1), [1, self.num_facts, 1])              
         m = tf.tile(tf.expand_dims(memory, 1), [1, self.num_facts, 1])                     
