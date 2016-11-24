@@ -2,6 +2,17 @@ This is a neural network architecture for visual question answering roughly base
 
 This project is implemented in Tensorflow, and allows end-to-end training of both CNN and RNN parts. To use it, you will need the Tensorflow version of VGG16 or ResNet(50, 101, 152) model, which can be obtained by using Caffe-to-Tensorflow. 
 
+Examples
+----------
+![img](examples/COCO_val2014_000000000042_420_result.jpg)
+![img](examples/COCO_val2014_000000052470_524702_result.jpg)
+![img](examples/COCO_val2014_000000052527_525272_result.jpg)
+![img](examples/COCO_val2014_000000131207_1312070_result.jpg)
+![img](examples/COCO_val2014_000000235984_2359841_result.jpg)
+![img](examples/COCO_val2014_000000367029_3670291_result.jpg)
+![img](examples/COCO_val2014_000000393282_3932820_result.jpg)
+![img](examples/COCO_val2014_000000576827_5768271_result.jpg)
+
 References
 ----------
 
