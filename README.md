@@ -8,10 +8,11 @@ Examples
 ![img](examples/COCO_val2014_000000052527_525272_result.jpg)
 ![img](examples/COCO_val2014_000000131207_1312070_result.jpg)
 ![img](examples/COCO_val2014_000000235984_2359841_result.jpg)
-![img](examples/COCO_val2014_000000000042_420_result.jpg)
+![img](examples/COCO_val2014_000000078820_788200_result.jpg)
 ![img](examples/COCO_val2014_000000367029_3670291_result.jpg)
 ![img](examples/COCO_val2014_000000393282_3932820_result.jpg)
 ![img](examples/COCO_val2014_000000576827_5768271_result.jpg)
+![img](examples/COCO_val2014_000000445682_4456821_result.jpg)
 
 References
 ----------
