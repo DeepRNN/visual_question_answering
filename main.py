@@ -29,6 +29,7 @@ def main(argv):
     parser.add_argument('--val_question_file', default='./val/OpenEnded_mscoco_val2014_questions.json', help='JSON file storing the open-ended questions for COCO val2014 images')
     parser.add_argument('--val_answer_file', default='./val/mscoco_val2014_annotations.json', help='JSON file storing the answers to open-ended questions for COCO val2014 images')
     parser.add_argument('--val_annotation_file', default='./val/anns.csv', help='Temporary file to store the validation information')
+    parser.add_argument('--val_result_dir', default='./val/results/', help='Directory to store the validation results as images')
 
     parser.add_argument('--test_image_dir', default='./test/images/', help='Directory containing the testing images')
     parser.add_argument('--test_question_file', default='./test/questions.csv', help='File storing the questions for testing images')
@@ -46,13 +47,13 @@ def main(argv):
     parser.add_argument('--solver', default='adam', help='Optimizer to use: Can be adam, momentum, rmsprop or sgd') 
     parser.add_argument('--num_epochs', type=int, default=10, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
-    parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
+    parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum (for some optimizers)') 
     parser.add_argument('--decay', type=float, default=0.9, help='Decay (for some optimizers)') 
     parser.add_argument('--batch_norm', action='store_true', default=False, help='Turn on to use batch normalization')  
 
-    parser.add_argument('--dim_hidden', type=int, default=1000, help='Dimension of the hidden state in each GRU')
+    parser.add_argument('--dim_hidden', type=int, default=500, help='Dimension of the hidden state in each GRU')
     parser.add_argument('--dim_embed', type=int, default=300, help='Dimension of the word embedding')
     parser.add_argument('--memory_step', type=int, default=3, help='Number of memory update steps')
     parser.add_argument('--memory_update', default='gru', help='Memory update mechanism: Can be gru or mlp')
@@ -60,7 +61,7 @@ def main(argv):
     parser.add_argument('--init_embed_with_glove', action='store_true', default=False, help='Turn on to initialize the word embedding with the GloVe data')  
     parser.add_argument('--fix_embed_weight', action='store_true', default=False, help='Turn on to fix the word embedding')
     parser.add_argument('--tie_memory_weight', action='store_true', default=False, help='Turn on to tie the memory weights at different time steps')
-    parser.add_argument('--class_balancing_factor', type=float, default=0.8, help='Class balancing factor. The larger it is, the model pays more attention to rare words.') 
+    parser.add_argument('--class_balancing_factor', type=float, default=0.0, help='Class balancing factor. The larger it is, the model pays more attention to rare words.') 
 
     args = parser.parse_args()
 
@@ -90,8 +91,7 @@ def main(argv):
         else:
             test_data = prepare_test_data(args)
             model = QuestionAnswerer(args, 'test')          
-            sess.run(tf.initialize_all_variables())
-#            model.load(sess)
+            model.load(sess)
             model.test(sess, test_data)
 
 if __name__=="__main__":

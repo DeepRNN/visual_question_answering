@@ -10,10 +10,10 @@ class AttnGRU:
 
     def __call__(self, inputs, state, attention):
         with tf.variable_scope('AttnGRU'):
-            r = fully_connected(tf.concat(1, [inputs, state]), self.num_units, 'AttnGRU_fc1', init_w='normal', init_b=1.0, group_id=1)
+            r = fully_connected(tf.concat(1, [inputs, state]), self.num_units, 'AttnGRU_fc1', init_b=1.0, group_id=1)
             r = batch_norm(r, 'AttnGRU_bn1', self.is_train, self.bn, 'sigmoid')
 
-            c = fully_connected(tf.concat(1, [inputs, r*state]), self.num_units, 'AttnGRU_fc2', init_w='normal', init_b=0.0, group_id=1)
+            c = fully_connected(tf.concat(1, [inputs, r*state]), self.num_units, 'AttnGRU_fc2', init_b=0.0, group_id=1)
             c = batch_norm(c, 'AttnGRU_bn2', self.is_train, self.bn, 'tanh') 
 
             new_state = attention * c + (1 - attention) * state

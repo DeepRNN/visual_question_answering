@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import cv2
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 from tqdm import tqdm
 
 from dataset import *
@@ -104,14 +106,19 @@ class BaseModel(object):
 
         print("Training complete.")
 
-    def val(self, sess, val_vqa, val_data):
+    def val(self, sess, val_vqa, val_data, show_result=False):
         """ Validate the model. """
         print("Validating the model...")
         answers = []
+        result_dir = self.params.val_result_dir
 
         # Compute the answers to the questions
         for k in tqdm(list(range(val_data.count))):
             batch = val_data.next_batch()
+            img_files, questions, question_lens = batch
+
+            img_file = img_files[0]
+            img_name = os.path.splitext(img_file.split(os.sep)[-1])[0]
 
             if self.train_cnn: 
                 feed_dict = self.get_feed_dict(batch, is_train=False) 
@@ -125,6 +132,22 @@ class BaseModel(object):
             answer = self.word_table.idx2word[result.squeeze()]
             answers.append({'question_id': val_data.question_ids[k], 'answer': answer})
 
+            # Save the result in an image file
+            question = questions[0]
+            q_len = question_lens[0]
+            q_words = ['Q:'] + [self.word_table.idx2word[question[i]] for i in range(q_len)]
+            if q_words[-1]!='?':
+                q_words.append('?')
+            ques = ' '.join(q_words)
+            a_words = ['A:'] + [answer]
+            ans = ' '.join(a_words)
+
+            img = mpimg.imread(img_file)
+            plt.imshow(img)
+            plt.axis('off')
+            plt.title(ques+'\n'+ans)
+            plt.savefig(os.path.join(result_dir, img_name+'_'+str(val_data.question_ids[k])+'_result.jpg'))
+
         val_data.reset() 
 
         # Evaluate these answers
@@ -133,13 +156,13 @@ class BaseModel(object):
         scorer.evaluate()
         print("Validation complete.")
 
-    def test(self, sess, test_data, show_result=True):
+    def test(self, sess, test_data):
         """ Test the model. """
         print("Testing the model...")
         font = cv2.FONT_HERSHEY_COMPLEX        
         test_info_file = self.params.test_info_file
-        test_result_file = self.params.test_result_file
-        test_result_dir = self.params.test_result_dir
+        result_file = self.params.test_result_file
+        result_dir = self.params.test_result_dir
 
         question_ids = []
         answers = []
@@ -165,46 +188,27 @@ class BaseModel(object):
             answers.append(answer)
             question_ids.append(test_data.question_ids[k])
 
-           # Show the answer if required
-            img = cv2.imread(img_file)
-            H, W, D = img.shape
-
+            # Save the result in an image file
             question = questions[0]
             q_len = question_lens[0]
             q_words = ['Q:'] + [self.word_table.idx2word[question[i]] for i in range(q_len)]
             if q_words[-1]!='?':
                 q_words.append('?')
-            num_q_word = len(q_words)
+            ques = ' '.join(q_words)
             a_words = ['A:'] + [answer]
+            ans = ' '.join(a_words)
 
-            num_word_per_line = int(W / 80)
-            if num_q_word % num_word_per_line == 0:
-                num_line = int(num_q_word / num_word_per_line) + 1
-            else:
-                num_line = int(num_q_word / num_word_per_line) + 2
-
-            qa = np.ones((num_line*30+15, W, 3), np.uint8) * 255                  
-            start = 0
-            for j in range(num_line-1):
-                end = min(start + num_word_per_line, num_q_word)
-                cv2.putText(qa, ' '.join(q_words[start:end]), (10, j*25+20), font, 0.6, (0, 0, 0), 1)
-                start = end
-            cv2.putText(qa, ' '.join(a_words), (10, (num_line-1)*25+20), font, 0.6, (0, 0, 0), 1)
-            extended_img = np.concatenate((img, qa), axis=0)
- 
-            if show_result:
-                cv2.imshow(img_name, extended_img)
-                cv2.moveWindow(img_name, 700, 100)
-                cv2.waitKey(5000)
-                cv2.destroyAllWindows()
-
-            cv2.imwrite(os.path.join(test_result_dir, img_name+'_'+str(test_data.question_ids[k])+'_result.jpg'), extended_img)
+            img = mpimg.imread(img_file)
+            plt.imshow(img)
+            plt.axis('off')
+            plt.title(ques+'\n'+ans)
+            plt.savefig(os.path.join(result_dir, img_name+'_'+str(test_data.question_ids[k])+'_result.jpg'))
 
         # Save the answers to a file
         test_info = pd.read_csv(test_info_file)
         results = pd.DataFrame({'question_id': question_ids, 'answer': answers})
         results = pd.merge(test_info, results)
-        results.to_csv(test_result_file)
+        results.to_csv(result_file)
         print("Testing complete.")
 
     def save(self, sess):
