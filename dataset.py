@@ -10,7 +10,7 @@ from utils.words import *
 from utils.vqa.vqa import *
 
 class DataSet():
-    def __init__(self, img_files, questions, question_lens, question_ids, answers=None, batch_size=1, is_train=False,  shuffle=False):
+    def __init__(self, img_files, questions, question_lens, question_ids, batch_size, answers=None, is_train=False,  shuffle=False):
         self.img_files = np.array(img_files)
         self.questions = np.array(questions)
         self.question_lens = np.array(question_lens)
@@ -24,8 +24,8 @@ class DataSet():
     def setup(self):
         """ Setup the dataset. """
         self.count = len(self.question_ids)
-        self.num_batches = int(self.count * 1.0 / self.batch_size)
-        self.current_index = 0
+        self.num_batches = int(np.ceil(self.count * 1.0 / self.batch_size))
+        self.fake_count = self.num_batches * self.batch_size - self.count
         self.indices = list(range(self.count))
         self.reset()
 
@@ -38,12 +38,19 @@ class DataSet():
     def next_batch(self):
         """ Fetch the next batch. """
         assert self.has_next_batch()
-        start, end = self.current_index, self.current_index + self.batch_size
-        current_idx = self.indices[start:end]
+
+        if self.has_full_next_batch():
+            start, end = self.current_index, self.current_index + self.batch_size
+            current_idx = self.indices[start:end]
+        else:
+            start, end = self.current_index, self.count
+            current_idx = self.indices[start:end]
+            current_idx += list(np.random.choice(self.count, self.fake_count))
 
         img_files = self.img_files[current_idx]
         questions = self.questions[current_idx]
         question_lens = self.question_lens[current_idx]
+
         if self.is_train: 
             answers = self.answers[current_idx]
             self.current_index += self.batch_size
@@ -53,9 +60,12 @@ class DataSet():
             return img_files, questions, question_lens
 
     def has_next_batch(self):
-        """ Determine whether there is any batch left. """
-        return self.current_index + self.batch_size <= self.count
+        """ Determine whether there is a batch left. """
+        return self.current_index < self.count
 
+    def has_full_next_batch(self):
+        """ Determine whether there is a full batch left. """
+        return self.current_index + self.batch_size <= self.count
 
 def prepare_train_data(args):
     """ Prepare relevant data for training the model. """
@@ -96,13 +106,15 @@ def prepare_train_data(args):
     answers = symbolize_answers(answers, word_table)
 
     print("Building the training dataset...")
-    dataset = DataSet(image_files, questions, question_lens, question_ids, answers, batch_size, True, True)
+    dataset = DataSet(image_files, questions, question_lens, question_ids, batch_size, answers, True, True)
     print("Dataset built.")
     return vqa, dataset
 
 def prepare_val_data(args):
     """ Prepare relevant data for validating the model. """
-    image_dir, question_file, answer_file, annotation_file = args.val_image_dir, args.val_question_file, args.val_answer_file, args.val_annotation_file
+    image_dir, question_file = args.val_image_dir, args.val_question_file
+    answer_file, annotation_file = args.val_answer_file, args.val_annotation_file
+    batch_size = args.batch_size
 
     word_table_file, glove_dir = args.word_table_file, args.glove_dir
     dim_embed, batch_size, max_ques_len = args.dim_embed, args.batch_size, args.max_ques_len
@@ -124,15 +136,15 @@ def prepare_val_data(args):
     questions, question_lens = symbolize_questions(questions, word_table)
    
     print("Building the validation dataset...")
-    dataset = DataSet(image_files, questions, question_lens, question_ids)
+    dataset = DataSet(image_files, questions, question_lens, question_ids, batch_size)
     print("Dataset built.")
     return vqa, dataset
-
 
 def prepare_test_data(args):
     """ Prepare relevant data for testing the model. """
     image_dir, question_file = args.test_image_dir, args.test_question_file
     info_file = args.test_info_file
+    batch_size = args.batch_size
 
     word_table_file, glove_dir = args.word_table_file, args.glove_dir
     dim_embed, batch_size, max_ques_len = args.dim_embed, args.batch_size, args.max_ques_len
@@ -157,10 +169,9 @@ def prepare_test_data(args):
     questions, question_lens = symbolize_questions(questions, word_table)
 
     print("Building the testing dataset...")    
-    dataset = DataSet(image_files, questions, question_lens, question_ids)
+    dataset = DataSet(image_files, questions, question_lens, question_ids, batch_size)
     print("Dataset built.")
     return dataset
-
 
 def process_vqa(vqa, label, img_dir, annotation_file):
     """ Build an annotation file containing the training or validation information. """
@@ -170,7 +181,11 @@ def process_vqa(vqa, label, img_dir, annotation_file):
     answers = [vqa.qa[k]['best_answer'] for k in question_ids]
     questions = [vqa.qqa[k]['question'] for k in question_ids]
 
-    annotations = pd.DataFrame({'question_id': question_ids, 'image_id': image_ids, 'image_file': image_files, 'question': questions, 'answer': answers})
+    annotations = pd.DataFrame({'question_id': question_ids, 
+                                'image_id': image_ids, 
+                                'image_file': image_files, 
+                                'question': questions, 
+                                'answer': answers})
     annotations.to_csv(annotation_file)
     return annotations
 

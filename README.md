@@ -1,18 +1,6 @@
-This is a neural network architecture for visual question answering roughly based on the paper "Dynamic Memory Networks for Visual and Textual Question Answering" by Xiong et al. (ICML2016). The input includes an image and a question about the image, and the output is the answer to the question. It first uses a convolutional neural network to extract a set of features of the image, which are called "contexts" or "facts". These facts are fused by a bidirectional GRU. It also uses a GRU recurrent neural network to encode the question. Then the encodings of image and question are fed into an episodic memory module, which consists of the attention mechanism (responsible for producing a contextual vector) and the memory update mechanism (responsible for generating the episode memory based upon the contextual vector and previous episode memory). Both the soft and GRU-based attention mechanisms are implemented. Finally, the model generates a one-word answer based on the last memory and the encoding of question. 
+This neural system for visual question answering is roughly based on the paper "Dynamic Memory Networks for Visual and Textual Question Answering" by Xiong et al. (ICML2016). It is implemented using the Tensorflow library, and allows end-to-end training of both CNN and RNN parts. To use it, you will need the Tensorflow version of VGG16 or ResNet 50/101/152, which can be obtained with Caffe-to-Tensorflow. 
 
-This project is implemented in Tensorflow, and allows end-to-end training of both CNN and RNN parts. To use it, you will need the Tensorflow version of VGG16 or ResNet(50, 101, 152) model, which can be obtained by using Caffe-to-Tensorflow. 
-
-Examples
-----------
-![img](examples/COCO_val2014_000000393282_3932820_result.jpg)
-![img](examples/COCO_val2014_000000052527_525272_result.jpg)
-![img](examples/COCO_val2014_000000131207_1312070_result.jpg)
-![img](examples/COCO_val2014_000000235984_2359841_result.jpg)
-![img](examples/COCO_val2014_000000078820_788200_result.jpg)
-![img](examples/COCO_val2014_000000367029_3670291_result.jpg)
-![img](examples/COCO_val2014_000000052470_524702_result.jpg)
-![img](examples/COCO_val2014_000000576827_5768271_result.jpg)
-![img](examples/COCO_val2014_000000445682_4456821_result.jpg)
+**The code has been updated to be compatible with Tensorflow r1.4**.
 
 References
 ----------

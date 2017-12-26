@@ -147,13 +147,13 @@ class VQAEval:
         def showAccuracy(self, accQA, accQuesType, accAnsType):
                 print("Overall accurarcy = %f" %(self.accuracy['overall']))
 
-               # print("Accuracy per question type:")
-               # for quesType in accQuesType:
-               #     print("quesType: %s   accuracy = %f" %(quesType, self.accuracy['perQuestionType'][quesType]))
+                print("Accuracy per question type:")
+                for quesType in accQuesType:
+                    print("quesType: %s   accuracy = %f" %(quesType, self.accuracy['perQuestionType'][quesType]))
 
-               # print("Accuracy per answer type:")
-               # for ansType in accAnsType:
-               #     print("ansType: %s   accuracy = %f" %(ansType, self.accuracy['perAnswerType'][ansType]))
+                print("Accuracy per answer type:")
+                for ansType in accAnsType:
+                    print("ansType: %s   accuracy = %f" %(ansType, self.accuracy['perAnswerType'][ansType]))
 
         def setEvalQA(self, quesId, acc):
                 self.evalQA[quesId] = round(100*acc, self.n)

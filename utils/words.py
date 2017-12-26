@@ -24,7 +24,7 @@ class WordTable():
                 self.word2idx[w] = self.num_words
                 self.num_words += 1
             if w not in self.word2vec:
-                self.word2vec[w] = np.random.randn(self.dim_embed) * 0.01
+                self.word2vec[w] = np.random.randn(self.dim_embed) * 0.05
             self.word_count[w] = self.word_count.get(w, 0) + 1
 
     def compute_freq(self):
