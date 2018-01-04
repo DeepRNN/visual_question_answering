@@ -16,8 +16,9 @@ class QuestionAnswerer(BaseModel):
         with tf.variable_scope("RNN"):
             self.build_rnn()
 
-        with tf.variable_scope("Summary"):
-            self.build_summary()
+        if self.mode=="train":
+            with tf.variable_scope("Summary"):
+                self.build_summary()
 
     def build_cnn(self):
         """ Build the CNN. """
@@ -34,7 +35,7 @@ class QuestionAnswerer(BaseModel):
 
     def build_vgg16(self):
         """ Build the VGG16 net. """
-        use_batch_norm = self.params.batch_norm
+        use_batch_norm = self.params.use_batch_norm
 
         imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)
@@ -122,7 +123,7 @@ class QuestionAnswerer(BaseModel):
 
     def build_resnet50(self):
         """ Build the ResNet50 net. """
-        use_batch_norm = self.params.batch_norm
+        use_batch_norm = self.params.use_batch_norm
 
         imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)     
@@ -163,7 +164,7 @@ class QuestionAnswerer(BaseModel):
 
     def build_resnet101(self):
         """ Build the ResNet101 net. """
-        use_batch_norm = self.params.batch_norm
+        use_batch_norm = self.params.use_batch_norm
 
         imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)
@@ -204,7 +205,7 @@ class QuestionAnswerer(BaseModel):
 
     def build_resnet152(self):
         """ Build the ResNet152 net. """
-        use_batch_norm = self.params.batch_norm
+        use_batch_norm = self.params.use_batch_norm
 
         imgs = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape)
         is_train = tf.placeholder(tf.bool)
@@ -263,8 +264,9 @@ class QuestionAnswerer(BaseModel):
         """ Build the RNN. """
         print("Building the RNN part...")
         params = self.params
-        use_batch_norm = params.batch_norm      
-        keep_prob = params.dropout_keep_prob
+        use_batch_norm = params.use_batch_norm      
+        fc_keep_prob = params.fc_keep_prob
+        gru_keep_prob = params.gru_keep_prob
         is_train = self.is_train
         batch_size = self.batch_size                  
 
@@ -276,8 +278,6 @@ class QuestionAnswerer(BaseModel):
         dim_fact = self.conv_feat_shape[1]                                      
         num_words = self.word_table.num_words              
 
-        self.word_weight = np.exp(-np.array(self.word_table.word_freq)*self.class_balancing_factor)
-
         facts = self.conv_feats
 
         questions = tf.placeholder(tf.int32, [batch_size, max_ques_len])        
@@ -287,15 +287,12 @@ class QuestionAnswerer(BaseModel):
         
         # Initialize the word embedding
         idx2vec = np.array([self.word_table.word2vec[self.word_table.idx2word[i]] for i in range(num_words)])  
-        if params.fix_embed_weight:
-            emb_w = tf.convert_to_tensor(idx2vec, tf.float32)                       
-        else:
-            emb_w = weight('emb_weights', [num_words, dim_embed], init_val=idx2vec)                
+        emb_w = weight('emb_weights', [num_words, dim_embed], init_val=idx2vec)                
 
         # Encode the questions
         with tf.variable_scope('Question'):
             gru = tf.nn.rnn_cell.GRUCell(dim_hidden)
-            gru = tf.nn.rnn_cell.DropoutWrapper(gru, keep_prob, keep_prob, keep_prob)
+            gru = tf.nn.rnn_cell.DropoutWrapper(gru, gru_keep_prob, gru_keep_prob, gru_keep_prob)
 
             word_list = tf.unstack(questions, axis=1)                                             
             ques_embed = [tf.nn.embedding_lookup(emb_w, word) for word in word_list]             
@@ -314,7 +311,7 @@ class QuestionAnswerer(BaseModel):
         # Encode the facts
         with tf.name_scope('InputFusion'):
             gru = tf.nn.rnn_cell.GRUCell(dim_hidden)
-            gru = tf.nn.rnn_cell.DropoutWrapper(gru, keep_prob, keep_prob, keep_prob)
+            gru = tf.nn.rnn_cell.DropoutWrapper(gru, gru_keep_prob, gru_keep_prob, gru_keep_prob)
 
 
             with tf.variable_scope('Forward'):
@@ -334,7 +331,7 @@ class QuestionAnswerer(BaseModel):
             episode = EpisodicMemory(dim_hidden, num_facts, question_enc, facts_enc, params.attention, is_train, use_batch_norm)
             memory = tf.identity(question_enc)                                                   
             gru = tf.nn.rnn_cell.GRUCell(dim_hidden)
-            gru = tf.nn.rnn_cell.DropoutWrapper(gru, keep_prob, keep_prob, keep_prob)
+            gru = tf.nn.rnn_cell.DropoutWrapper(gru, gru_keep_prob, gru_keep_prob, gru_keep_prob)
 
             # Tied memory weights
             if params.tie_memory_weight: 
@@ -365,7 +362,7 @@ class QuestionAnswerer(BaseModel):
                             memory = batch_norm(memory, 'EM_bn', is_train, use_batch_norm)
                             memory = nonlinear(memory, 'tanh')  
 
-        memory = dropout(memory, keep_prob, is_train)                                                  
+        memory = dropout(memory, fc_keep_prob, is_train)                                                  
         
         # Compute the result
         with tf.variable_scope('Result'):    
@@ -408,6 +405,7 @@ class QuestionAnswerer(BaseModel):
                 solver = tf.train.GradientDescentOptimizer(learning_rate)
 
             gs = tf.gradients(loss, g_vars)
+            gs, _ = tf.clip_by_global_norm(gs, 5.0)
             opt_op = solver.apply_gradients(zip(gs, g_vars), global_step=self.global_step)
 
         self.questions = questions
@@ -430,6 +428,7 @@ class QuestionAnswerer(BaseModel):
 
     def build_summary(self):
         """Build the summary (for TensorBoard visualization)"""
+        assert self.mode=="train"
         with tf.name_scope("Variables"):
             for var in tf.trainable_variables():
                 with tf.name_scope(var.name[:var.name.find(":")]):

@@ -50,20 +50,22 @@ class BaseModel(object):
     def __init__(self, params, mode):
         self.params = params
         self.mode = mode
-        self.batch_size = params.batch_size 
 
         self.cnn_model = params.cnn_model
         self.train_cnn = params.train_cnn
 
-        self.save_dir = params.save_dir
+        self.batch_size = params.batch_size 
 
-        self.class_balancing_factor = params.class_balancing_factor
+        self.save_dir = params.save_dir
 
         self.img_loader = ImageLoader(params.mean_file)
         self.img_shape = [224, 224, 3]
 
         self.word_table = WordTable(params.dim_embed, params.max_ques_len, params.word_table_file)
         self.word_table.load()
+
+        self.class_balancing_factor = params.class_balancing_factor
+        self.word_weight = np.exp(-np.array(self.word_table.word_freq)*self.class_balancing_factor)
 
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
@@ -101,8 +103,8 @@ class BaseModel(object):
         print("Training complete.")
 
     def val(self, sess, val_vqa, val_data, save_result_as_img=False):
-        """ Validate the model. """
-        print("Validating the model...")
+        """ Evaluate the model. """
+        print("Evaluating the model...")
         answers = []
         result_dir = self.params.val_result_dir
 
@@ -146,7 +148,7 @@ class BaseModel(object):
         val_res_vqa = val_vqa.loadRes2(answers)
         scorer = VQAEval(val_vqa, val_res_vqa)
         scorer.evaluate()
-        print("Validation complete.")
+        print("Evaluation complete.")
 
     def test(self, sess, test_data, save_result_as_img=True):
         """ Test the model. """
