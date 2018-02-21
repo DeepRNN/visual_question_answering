@@ -47,14 +47,14 @@ class Config(object):
         # about the vocabulary
         self.vocabulary_file = './vocabulary.csv'
 
-        # about the training files
+        # about the training
         self.train_image_dir = './train/images/'
         self.train_question_file = './train/OpenEnded_mscoco_train2014_questions.json'
         self.train_answer_file = './train/mscoco_train2014_annotations.json'
         self.temp_train_annotation_file = './train/anns.csv'
         self.temp_train_data_file = './train/data.npy'
 
-        # about the evaluation files
+        # about the evaluation
         self.eval_image_dir = './val/images/'
         self.eval_question_file = './val/OpenEnded_mscoco_val2014_questions.json'
         self.eval_answer_file = './val/mscoco_val2014_annotations.json'
@@ -64,7 +64,7 @@ class Config(object):
         self.eval_result_file = './val/results.json'
         self.save_eval_result_as_image = False
 
-        # about the testing files
+        # about the testing
         self.test_image_dir = './test/images/'
         self.test_question_file = './test/questions.csv'
         self.temp_test_info_file = './test/info.csv'

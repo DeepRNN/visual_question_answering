@@ -11,9 +11,9 @@ This neural system for visual question answering is roughly based on the paper "
 * **tqdm** ([instructions](https://pypi.python.org/pypi/tqdm))
 
 ### Usage
-* **Preparation:** Download and extract the COCO train2014 and val2014 images  [here](http://cocodataset.org/#download). Put the COCO train2014 images in the folder `train/images`, and put the COCO val2014 images in the folder `val/images`. Download and extract the VQA v1 training and validation questions and annotations [here](http://www.visualqa.org/vqa_v1_download.html). Put the file `mscoco_train2014_annotations.json` and `OpenEnded_mscoco_train2014_questions.json` in the folder
+* **Preparation:** Download the COCO train2014 and val2014 images  [here](http://cocodataset.org/#download). Put the COCO train2014 images in the folder `train/images`, and put the COCO val2014 images in the folder `val/images`. Download the VQA v1 training and validation questions and annotations [here](http://www.visualqa.org/vqa_v1_download.html). Put the file `mscoco_train2014_annotations.json` and `OpenEnded_mscoco_train2014_questions.json` in the folder
 `train`. Similarly, put the file `mscoco_val2014_annotations.json` and `OpenEnded_mscoco_val2014_questions.json` in the folder
-`val`. Furthermore, download and extract the pretrained VGG16 net [here](https://app.box.com/s/idt5khauxsamcg3y69jz13w6sc6122ph) or ResNet50 net [here](https://app.box.com/s/17vthb1zl0zeh340m4gaw0luuf2vscne) if you want to use it to initialize the CNN part.
+`val`. Furthermore, download the pretrained VGG16 net [here](https://app.box.com/s/idt5khauxsamcg3y69jz13w6sc6122ph) or ResNet50 net [here](https://app.box.com/s/17vthb1zl0zeh340m4gaw0luuf2vscne) if you want to use it to initialize the CNN part.
 
 * **Training:**
 To train a model using the VQA v1 training data, first setup various parameters in the file `config.py` and then run a command like this:
