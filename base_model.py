@@ -1,259 +1,237 @@
 import os
-import sys
-import json
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import cPickle as pickle
 from tqdm import tqdm
+import json
+import copy
+import string
 
-from dataset import *
-from utils.words import *
-from utils.vqa.vqa import *
-from utils.vqa.vqaEval import *
-
-class ImageLoader(object):
-    def __init__(self, mean_file):
-        self.bgr = True 
-        self.scale_shape = np.array([224, 224], np.int32)
-        self.crop_shape = np.array([224, 224], np.int32)
-        self.mean = np.load(mean_file).mean(1).mean(1)
-
-    def load_img(self, img_file):      
-        """ Load and preprocess an image. """
-        img = cv2.imread(img_file)
-
-        if self.bgr:
-            temp = img.swapaxes(0, 2)
-            temp = temp[::-1]
-            img = temp.swapaxes(0, 2)
-
-        img = cv2.resize(img, (self.scale_shape[0], self.scale_shape[1]))
-        offset = (self.scale_shape - self.crop_shape) / 2
-        offset = offset.astype(np.int32)
-        img = img[offset[0]:offset[0]+self.crop_shape[0], offset[1]:offset[1]+self.crop_shape[1], :]
-        img = img - self.mean
-        return img
-
-    def load_imgs(self, img_files):
-        """ Load and preprocess a list of images. """
-        imgs = []
-        for img_file in img_files:
-            imgs.append(self.load_img(img_file))
-        imgs = np.array(imgs, np.float32)
-        return imgs
-
+from utils.nn import NN
+from utils.misc import ImageLoader
+from utils.vqa.vqa import VQA
+from utils.vqa.vqaEval import VQAEval
 
 class BaseModel(object):
-    def __init__(self, params, mode):
-        self.params = params
-        self.mode = mode
-
-        self.cnn_model = params.cnn_model
-        self.train_cnn = params.train_cnn
-
-        self.batch_size = params.batch_size 
-
-        self.save_dir = params.save_dir
-
-        self.img_loader = ImageLoader(params.mean_file)
-        self.img_shape = [224, 224, 3]
-
-        self.word_table = WordTable(params.dim_embed, params.max_ques_len, params.word_table_file)
-        self.word_table.load()
-
-        self.class_balancing_factor = params.class_balancing_factor
-        self.word_weight = np.exp(-np.array(self.word_table.word_freq)*self.class_balancing_factor)
-
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-
+    def __init__(self, config):
+        self.config = config
+        self.is_train = True if config.phase == 'train' else False
+        self.train_cnn = self.is_train and config.train_cnn
+        self.image_loader = ImageLoader('./utils/ilsvrc_2012_mean.npy')
+        self.image_shape = [224, 224, 3]
+        self.global_step = tf.Variable(0,
+                                       name = 'global_step',
+                                       trainable = False)
+        self.nn = NN(config)
         self.build()
 
     def build(self):
         raise NotImplementedError()
 
-    def get_feed_dict(self, batch, is_train):
+    def get_feed_dict(self, batch):
         raise NotImplementedError()
 
-    def train(self, sess, train_vqa, train_data):
-        """ Train the model. """
+    def train(self, sess, train_data):
+        """ Train the model using the VQA training data. """
         print("Training the model...")
-        params = self.params
-        num_epochs = params.num_epochs
+        config = self.config
 
-        train_writer = tf.summary.FileWriter("./", sess.graph)
-        for epoch_no in tqdm(list(range(num_epochs)), desc='epoch'):
+        if not os.path.exists(config.summary_dir):
+            os.mkdir(config.summary_dir)
+        train_writer = tf.summary.FileWriter(config.summary_dir, sess.graph)
+
+        for epoch_no in tqdm(list(range(config.num_epochs)), desc='epoch'):
             for idx in tqdm(list(range(train_data.num_batches)), desc='batch'):
                 batch = train_data.next_batch()
-                feed_dict = self.get_feed_dict(batch, is_train=True)
-                _, summary, global_step = sess.run([self.opt_op, 
-                                                    self.summary, 
-                                                    self.global_step], 
-                                                    feed_dict=feed_dict)
-
-                if (global_step + 1) % params.save_period == 0:
-                    self.save(sess)
-
+                feed_dict = self.get_feed_dict(batch)
+                _, summary, global_step = sess.run([self.opt_op,
+                                                    self.summary,
+                                                    self.global_step],
+                                                    feed_dict = feed_dict)
+                if (global_step + 1) % config.save_period == 0:
+                    self.save()
                 train_writer.add_summary(summary, global_step)
-
             train_data.reset()
 
         print("Training complete.")
 
-    def val(self, sess, val_vqa, val_data, save_result_as_img=False):
-        """ Evaluate the model. """
+    def eval(self, sess, eval_gt_vqa, eval_data, vocabulary):
+        """ Evaluate the model using the VQA validation data. """
         print("Evaluating the model...")
+        config = self.config
+        if not os.path.exists(config.eval_result_dir):
+            os.mkdir(config.eval_result_dir)
+
+        question_ids = eval_data.question_ids
         answers = []
-        result_dir = self.params.val_result_dir
 
         # Compute the answers to the questions
-        cur_ind = 0
-        for k in tqdm(list(range(val_data.num_batches))):
-            batch = val_data.next_batch()
-            img_files, questions, question_lens = batch
-            feed_dict = self.get_feed_dict(batch, is_train=False) 
-            result = sess.run(self.results, feed_dict=feed_dict)
+        idx = 0
+        for k in tqdm(list(range(eval_data.num_batches))):
+            batch = eval_data.next_batch()
+            image_files, question_word_idxs, question_lens = batch
+            feed_dict = self.get_feed_dict(batch)
+            result = sess.run(self.prediction, feed_dict = feed_dict)
 
-            fake_cnt = 0 if k<val_data.num_batches-1 else val_data.fake_count
-            for l in range(val_data.batch_size-fake_cnt):            
-                answer = self.word_table.idx2word[result[l]]
-                answers.append({'question_id': val_data.question_ids[cur_ind], 'answer': answer})
-                cur_ind += 1
+            fake_cnt = 0 if k<eval_data.num_batches-1 \
+                         else eval_data.fake_count
+            for l in range(eval_data.batch_size-fake_cnt):
+                answer = vocabulary.words[result[l]]
+                answers.append(answer)
 
                 # Save the result in an image file
-                if save_result_as_img:
-                    img_file = img_files[l]
-                    img_name = os.path.splitext(img_file.split(os.sep)[-1])[0]
+                if config.save_eval_result_as_image:
+                    image_file = image_files[l]
+                    image_name = image_file.split(os.sep)[-1]
+                    image_name = os.path.splitext(image_name)[0]
 
-                    question = questions[l]
+                    q_word_idxs = question_word_idxs[l]
                     q_len = question_lens[l]
-                    q_words = ['Q:'] + [self.word_table.idx2word[question[i]] for i in range(q_len)]
-                    if q_words[-1]!='?':
+                    q_words = [vocabulary.words[q_word_idxs[i]] \
+                        for i in range(q_len)]
+                    if q_words[-1] != '?':
                         q_words.append('?')
-                    ques = ' '.join(q_words)
-                    a_words = ['A:'] + [answer]
-                    ans = ' '.join(a_words)
+                    Q = 'Q: ' + ''.join([' '+w if not w.startswith("'") \
+                        and w not in string.punctuation \
+                        else w for w in q_words]).strip()
+                    A = 'A: ' + answer
 
-                    img = mpimg.imread(img_file)
-                    plt.imshow(img)
+                    image = mpimg.imread(image_file)
+                    plt.imshow(image)
                     plt.axis('off')
-                    plt.title(ques+'\n'+ans)
-                    plt.savefig(os.path.join(result_dir, img_name+'_'+str(val_data.question_ids[k])+'_result.jpg'))
-        
-        val_data.reset() 
+                    plt.title(Q+'\n'+A)
+                    plt.savefig(os.path.join(config.eval_result_dir, \
+                        image_name + '_' + str(question_ids[idx]) \
+                        + '_result.jpg'))
+
+                idx += 1
+
+        results = [{'question_id': question_id, 'answer': answer} \
+                   for question_id, answer in zip(question_ids, answers)]
+        fp = open(config.eval_result_file, 'wb')
+        json.dump(results, fp)
+        fp.close()
 
         # Evaluate these answers
-        val_res_vqa = val_vqa.loadRes2(answers)
-        scorer = VQAEval(val_vqa, val_res_vqa)
+        eval_res_vqa = eval_gt_vqa.loadRes(config.eval_result_file,
+                                           config.eval_question_file)
+        scorer = VQAEval(eval_gt_vqa, eval_res_vqa)
         scorer.evaluate()
         print("Evaluation complete.")
 
-    def test(self, sess, test_data, save_result_as_img=True):
-        """ Test the model. """
+    def test(self, sess, test_data, vocabulary):
+        """ Test the model using any given images and questions. """
         print("Testing the model...")
-        test_info_file = self.params.test_info_file
-        result_file = self.params.test_result_file
-        result_dir = self.params.test_result_dir
+        config = self.config
 
-        question_ids = []
+        if not os.path.exists(config.test_result_dir):
+            os.mkdir(config.test_result_dir)
+
+        question_ids = test_data.question_ids
         answers = []
 
-        # Compute the answers to the questions        
-        cur_ind = 0
+        # Compute the answers to the questions
+        idx = 0
         for k in tqdm(list(range(test_data.num_batches))):
             batch = test_data.next_batch()
-            img_files, questions, question_lens = batch
-            feed_dict = self.get_feed_dict(batch, is_train=False) 
-            result = sess.run(self.results, feed_dict=feed_dict)  
-         
+            image_files, question_word_idxs, question_lens = batch
+            feed_dict = self.get_feed_dict(batch)
+            result = sess.run(self.prediction, feed_dict = feed_dict)
 
-            fake_cnt = 0 if k<test_data.num_batches-1 else test_data.fake_count
-            for l in range(test_data.batch_size-fake_cnt): 
-                answer = self.word_table.idx2word[result[l]]
+            fake_cnt = 0 if k < test_data.num_batches-1 \
+                       else test_data.fake_count
+            for l in range(test_data.batch_size-fake_cnt):
+                answer = vocabulary.words[result[l]]
                 answers.append(answer)
-                question_ids.append(test_data.question_ids[cur_ind])
-                cur_ind += 1
 
                 # Save the result in an image file
-                if save_result_as_img:
-                    img_file = img_files[l]
-                    img_name = os.path.splitext(img_file.split(os.sep)[-1])[0]
+                image_file = image_files[l]
+                image_name = image_file.split(os.sep)[-1]
+                image_name = os.path.splitext(image_name)[0]
 
-                    question = questions[l]
-                    q_len = question_lens[l]
-                    q_words = ['Q:'] + [self.word_table.idx2word[question[i]] for i in range(q_len)]
-                    if q_words[-1]!='?':
-                        q_words.append('?')
-                    ques = ' '.join(q_words)
-                    a_words = ['A:'] + [answer]
-                    ans = ' '.join(a_words)
+                q_word_idxs = question_word_idxs[l]
+                q_len = question_lens[l]
+                q_words = [vocabulary.words[q_word_idxs[i]] \
+                    for i in range(q_len)]
+                if q_words[-1] != '?':
+                    q_words.append('?')
+                Q = 'Q: ' + ''.join([' '+w if not w.startswith("'") \
+                    and w not in string.punctuation \
+                    else w for w in q_words]).strip()
+                A = 'A: ' + answer
 
-                    img = mpimg.imread(img_file)
-                    plt.imshow(img)
-                    plt.axis('off')
-                    plt.title(ques+'\n'+ans)
-                    plt.savefig(os.path.join(result_dir, img_name+'_'+str(test_data.question_ids[k])+'_result.jpg'))
+                image = mpimg.imread(image_file)
+                plt.imshow(image)
+                plt.axis('off')
+                plt.title(Q+'\n'+A)
+                plt.savefig(os.path.join(config.test_result_dir, \
+                    image_name + '_' + str(question_ids[idx]) \
+                    + '_result.jpg'))
+
+                idx += 1
 
         # Save the answers to a file
-        test_info = pd.read_csv(test_info_file)
-        results = pd.DataFrame({'question_id': question_ids, 'answer': answers})
+        test_info = pd.read_csv(config.temp_test_info_file)
+        results = pd.DataFrame({'question_id': question_ids,
+                                'answer': answers})
         results = pd.merge(test_info, results)
-        results.to_csv(result_file)
+        results.to_csv(config.test_result_file)
         print("Testing complete.")
 
-    def save(self, sess):
+    def save(self):
         """ Save the model. """
+        config = self.config
         data = {v.name: v.eval() for v in tf.global_variables()}
-        save_path = os.path.join(self.save_dir, str(self.global_step.eval()))  
+        save_path = os.path.join(config.save_dir, str(self.global_step.eval()))
 
-        print((" Saving the model to %s ..." % (save_path+".npy")))
-
+        print((" Saving the model to %s..." % (save_path+".npy")))
         np.save(save_path, data)
-        info_path = os.path.join(self.save_dir, "info")  
-        info_file = open(info_path, "wb")
-        info_file.write(str(self.global_step.eval()))
-        info_file.close()          
-
+        info_file = open(os.path.join(config.save_dir, "config.pickle"), "wb")
+        config_ = copy.copy(config)
+        config_.global_step = self.global_step.eval()
+        pickle.dump(config_, info_file)
+        info_file.close()
         print("Model saved.")
 
-    def load(self, sess):
+    def load(self, sess, model_file=None):
         """ Load the model. """
-        if self.params.model_file is not None:
-            save_path = self.params.model_file        
+        config = self.config
+        if model_file is not None:
+            save_path = model_file
         else:
-            info_path = os.path.join(self.save_dir, "info")  
+            info_path = os.path.join(config.save_dir, "config.pickle")
             info_file = open(info_path, "rb")
-            global_step = info_file.read()
-            info_file.close() 
-            save_path = os.path.join(self.save_dir, global_step+".npy")  
+            config = pickle.load(info_file)
+            global_step = config.global_step
+            info_file.close()
+            save_path = os.path.join(config.save_dir,
+                                     str(global_step)+".npy")
 
-        print("Loading the model from %s ..." % save_path)
-
+        print("Loading the model from %s..." %save_path)
         data_dict = np.load(save_path).item()
-        for v in tf.global_variables(): 
+        count = 0
+        for v in tqdm(tf.global_variables()):
             if v.name in data_dict.keys():
                 sess.run(v.assign(data_dict[v.name]))
+                count += 1
+        print("%d tensors loaded." %count)
 
-        print("Model loaded.")
-   
-    def load_cnn(self, data_path, session, ignore_missing=True):
+    def load_cnn(self, session, data_path, ignore_missing=True):
         """ Load a pretrained CNN model. """
-        print("Loading CNN model from %s..." %data_path)
+        print("Loading the CNN from %s..." %data_path)
         data_dict = np.load(data_path).item()
         count = 0
-        with tf.variable_scope("CNN", reuse=True):
-            for op_name in data_dict:
-                with tf.variable_scope(op_name, reuse=True):
-                    for param_name, data in data_dict[op_name].iteritems():
-                        try:
-                            var = tf.get_variable(param_name)
-                            session.run(var.assign(data))
-                            count += 1
-                        except ValueError:
-                            if not ignore_missing:
-                                raise
-        print("%d tensors loaded. " %count)
-
-
+        for op_name in tqdm(data_dict):
+            with tf.variable_scope(op_name, reuse=True):
+                for param_name, data in data_dict[op_name].iteritems():
+                    try:
+                        var = tf.get_variable(param_name)
+                        session.run(var.assign(data))
+                        count += 1
+                    except ValueError:
+                        pass
+        print("%d tensors loaded." %count)

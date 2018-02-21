@@ -3,7 +3,7 @@ __version__ = '0.9'
 
 # Interface for accessing the VQA dataset.
 
-# This code is based on the code written by Tsung-Yi Lin for MSCOCO Python API available at the following link: 
+# This code is based on the code written by Tsung-Yi Lin for MSCOCO Python API available at the following link:
 # (https://github.com/pdollar/coco/blob/master/PythonAPI/pycocotools/coco.py).
 
 # The following functions are defined:
@@ -19,6 +19,8 @@ __version__ = '0.9'
 import json
 import datetime
 import copy
+from tqdm import tqdm
+from nltk.tokenize import word_tokenize
 
 class VQA:
         def __init__(self, annotation_file=None, question_file=None):
@@ -49,15 +51,16 @@ class VQA:
                 # create index
                 print('creating index...')
                 imgToQA = {ann['image_id']: [] for ann in self.dataset['annotations']}
-                qa =  {ann['question_id']:       [] for ann in self.dataset['annotations']}
-                qqa = {ann['question_id']:       [] for ann in self.dataset['annotations']}
+                qa =  {ann['question_id']: [] for ann in self.dataset['annotations']}
+                qqa = {ann['question_id']: [] for ann in self.dataset['annotations']}
                 max_ques_len = 0
                 for ann in self.dataset['annotations']:
                         imgToQA[ann['image_id']] += [ann]
                         qa[ann['question_id']] = ann
                 for ques in self.questions['questions']:
                         qqa[ques['question_id']] = ques
-                        max_ques_len = max(max_ques_len, len(ques['question'].split(' ')))
+                        max_ques_len = max(max_ques_len,
+                            len(word_tokenize(ques['question'])))
                 print('index created!')
 
                 # create class members
@@ -146,7 +149,7 @@ class VQA:
                         print("Question: %s" %(self.qqa[quesId]['question']))
                         for ans in ann['answers']:
                                 print("Answer %d: %s" %(ans['answer_id'], ans['answer']))
-                
+
         def loadRes(self, resFile, quesFile):
                 """
                 Load result file and return a result object.
@@ -173,37 +176,7 @@ class VQA:
                         if res.dataset['task_type'] == 'Multiple Choice':
                                 assert ann['answer'] in self.qqa[quesId]['multiple_choices'], 'predicted answer is not one of the multiple choices'
                         qaAnn                = self.qa[quesId]
-                        ann['image_id']      = qaAnn['image_id'] 
-                        ann['question_type'] = qaAnn['question_type']
-                        ann['answer_type']   = qaAnn['answer_type']
-                print('DONE (t=%0.2fs)'%((datetime.datetime.utcnow() - time_t).total_seconds()))
-
-                res.dataset['annotations'] = anns
-                res.createIndex()
-                return res
-
-        def loadRes2(self, anns):
-                res = VQA()
-                res.questions = copy.deepcopy(self.questions) 
-                res.dataset['info'] = copy.deepcopy(self.questions['info'])
-                res.dataset['task_type'] = copy.deepcopy(self.questions['task_type'])
-                res.dataset['data_type'] = copy.deepcopy(self.questions['data_type'])
-                res.dataset['data_subtype'] = copy.deepcopy(self.questions['data_subtype'])
-                res.dataset['license'] = copy.deepcopy(self.questions['license'])
-
-                print('Loading and preparing results...     ')
-                time_t = datetime.datetime.utcnow()
-                
-                assert type(anns) == list, 'results is not an array of objects'
-                annsQuesIds = [ann['question_id'] for ann in anns]
-                assert set(annsQuesIds) == set(self.getQuesIds()), \
-                'Results do not correspond to current VQA set. Either the results do not have predictions for all question ids in annotation file or there is atleast one question id that does not belong to the question ids in the annotation file.'
-                for ann in anns:
-                        quesId                              = ann['question_id']
-                        if res.dataset['task_type'] == 'Multiple Choice':
-                                assert ann['answer'] in self.qqa[quesId]['multiple_choices'], 'predicted answer is not one of the multiple choices'
-                        qaAnn                = self.qa[quesId]
-                        ann['image_id']      = qaAnn['image_id'] 
+                        ann['image_id']      = qaAnn['image_id']
                         ann['question_type'] = qaAnn['question_type']
                         ann['answer_type']   = qaAnn['answer_type']
                 print('DONE (t=%0.2fs)'%((datetime.datetime.utcnow() - time_t).total_seconds()))
@@ -218,39 +191,50 @@ class VQA:
                     for ans in ann['answers']:
                         ans['answer'] = ans['answer'].lower()
                         count[ans['answer']] = count.get(ans['answer'], 0) + 1
-                    sorted_ans = sorted(list(count.items()), key=lambda x: x[1], reverse=True)                   
+                    sorted_ans = sorted(list(count.items()),
+                                        key=lambda x: x[1],
+                                        reverse=True)
                     best_ans, best_ans_count = sorted_ans[0]
                     ann['best_answer'] = best_ans
                     ann['best_answer_count'] = best_ans_count
-                
+
                 for ques in self.questions['questions']:
                     q = ques['question']
                     q = q.replace('?', '')
-                    q = q.lower().split()
-                    q = [x for x in q if len(x)>0]
-                    ques['question'] = ' '.join(q)
-               
+                    q = q.lower()
+                    ques['question'] = q
+
         def filter_by_ques_len(self, max_ques_len):
-                print("Removing extremely long questions...")
+                print("Filtering the questions by length...")
                 keep_ques = {}
-                for ques in self.questions['questions']:
-                    if len(ques['question'].split(' '))<=max_ques_len:
-                        keep_ques[ques['question_id']] = keep_ques.get(ques['question_id'], 0) + 1
+                for ques in tqdm(self.questions['questions']):
+                    if len(word_tokenize(ques['question'])) <= max_ques_len:
+                        keep_ques[ques['question_id']] = \
+                            keep_ques.get(ques['question_id'], 0) + 1
 
-                self.dataset['annotations'] = [ann for ann in self.dataset['annotations'] if keep_ques.get(ann['question_id'],0)>0]
-                self.questions['questions'] = [ques for ques in self.questions['questions'] if keep_ques.get(ques['question_id'],0)>0]
-
-                self.createIndex()
-       
-        def filter_by_ans_len(self, max_ans_len):
-                print("Removing questions with long answers...")
-                keep_ques = {}
-                for ann in self.dataset['annotations']:
-                    if len(ann['best_answer'].split(' '))<=max_ans_len and ann['best_answer_count']>=5:
-                        keep_ques[ann['question_id']] = keep_ques.get(ann['question_id'], 0) + 1
-
-                self.dataset['annotations'] = [ann for ann in self.dataset['annotations'] if keep_ques.get(ann['question_id'],0)>0]
-                self.questions['questions'] = [ques for ques in self.questions['questions'] if keep_ques.get(ques['question_id'],0)>0]
+                self.dataset['annotations'] = \
+                    [ann for ann in self.dataset['annotations'] \
+                    if keep_ques.get(ann['question_id'],0)>0]
+                self.questions['questions'] = \
+                    [ques for ques in self.questions['questions'] \
+                    if keep_ques.get(ques['question_id'],0)>0]
 
                 self.createIndex()
 
+        def filter_by_ans_len(self, max_ans_len, min_freq=5):
+                print("Filtering the answers by length...")
+                keep_ques = {}
+                for ann in tqdm(self.dataset['annotations']):
+                    if len(word_tokenize(ann['best_answer'])) <= max_ans_len \
+                        and ann['best_answer_count']>=min_freq:
+                        keep_ques[ann['question_id']] = \
+                            keep_ques.get(ann['question_id'], 0) + 1
+
+                self.dataset['annotations'] = \
+                    [ann for ann in self.dataset['annotations'] \
+                    if keep_ques.get(ann['question_id'],0)>0]
+                self.questions['questions'] = \
+                    [ques for ques in self.questions['questions'] \
+                    if keep_ques.get(ques['question_id'],0)>0]
+
+                self.createIndex()

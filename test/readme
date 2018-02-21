@@ -1,1 +1,0 @@
-Put a csv file containing the questions for the test images here. This csv file should contain three fields: image, question, question_id (which is a unique number for every question). 
