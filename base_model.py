@@ -4,7 +4,6 @@ import pandas as pd
 import tensorflow as tf
 import cv2
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import cPickle as pickle
 from tqdm import tqdm
 import json
@@ -100,7 +99,7 @@ class BaseModel(object):
                         else w for w in q_words]).strip()
                     A = 'A: ' + answer
 
-                    image = mpimg.imread(image_file)
+                    image = plt.imread(image_file)
                     plt.imshow(image)
                     plt.axis('off')
                     plt.title(Q+'\n'+A)
@@ -164,7 +163,7 @@ class BaseModel(object):
                     else w for w in q_words]).strip()
                 A = 'A: ' + answer
 
-                image = mpimg.imread(image_file)
+                image = plt.imread(image_file)
                 plt.imshow(image)
                 plt.axis('off')
                 plt.title(Q+'\n'+A)
